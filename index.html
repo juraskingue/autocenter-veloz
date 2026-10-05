@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Center Veloz — Acompanhamento de Serviços</title>
+<style>
+  :root { --azul:#0b3d91; --verde:#1b8a4b; --verm:#c0392b; --cinza:#f2f4f8; --borda:#d5dae3; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:var(--cinza); color:#1d2433; }
+  header { background:var(--azul); color:#fff; padding:12px 16px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+  header h1 { margin:0; font-size:1.2rem; }
+  nav button { background:transparent; color:#fff; border:1px solid #fff8; padding:8px 14px; border-radius:6px; cursor:pointer; }
+  nav button.on { background:#fff; color:var(--azul); font-weight:600; }
+  main { padding:16px; max-width:1200px; margin:auto; }
+  button { background:var(--azul); color:#fff; border:0; padding:8px 12px; border-radius:6px; cursor:pointer; }
+  button.sec { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+  input, select { padding:8px; border:1px solid var(--borda); border-radius:6px; font:inherit; }
+  form.novo, form.inline { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .kanban { display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; }
+  .col { background:#e7ebf3; border-radius:8px; padding:8px; min-width:200px; flex:1; }
+  .col h3 { font-size:.85rem; margin:4px 0 8px; display:flex; justify-content:space-between; }
+  .card { background:#fff; border:1px solid var(--borda); border-radius:6px; padding:8px; margin-bottom:8px; cursor:pointer; font-size:.9rem; }
+  .card.sel { outline:2px solid var(--azul); }
+  .vazio { color:#7a8497; font-size:.85rem; }
+  .detalhe { background:#fff; border:1px solid var(--borda); border-radius:8px; padding:16px; margin-top:16px; }
+  .itens { list-style:none; padding:0; margin:0 0 8px; }
+  .itens li { display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--borda); }
+  .itens li span { flex:1; }
+  em.ok { color:var(--verde); font-style:normal; font-weight:600; }
+  em.no { color:var(--verm); font-style:normal; font-weight:600; }
+  .fotos { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+  .fotos img { height:90px; border-radius:6px; border:1px solid var(--borda); }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; list-style:none; padding:0; }
+  .steps li { padding:6px 10px; border-radius:20px; background:var(--cinza); font-size:.8rem; color:#7a8497; }
+  .steps li.feito { background:#d8f0e2; color:var(--verde); }
+  .steps li.atual { background:var(--azul); color:#fff; font-weight:600; }
+  .hist { padding-left:18px; font-size:.9rem; }
+  footer { text-align:center; padding:16px; font-size:.8rem; color:#7a8497; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔧 Auto Center Veloz</h1>
+  <nav>
+    <button data-view="oficina">Painel da Oficina</button>
+    <button data-view="cliente">Visão do Cliente</button>
+  </nav>
+</header>
+<main id="app"></main>
+<footer>Protótipo acadêmico · dados salvos apenas neste navegador · <a href="#" onclick="resetar();return false">restaurar exemplo</a></footer>
+
+<script>
+const STATUS = ["Recebido", "Em diagnóstico", "Aguardando aprovação", "Em serviço", "Pronto para retirada"];
+const KEY = "veloz-os-v1";
+
+const seed = [
+  { id: 1, cliente: "Marcos Lima", placa: "ABC-1D23", veiculo: "Honda Civic 2018", status: "Aguardando aprovação",
+    itens: [{ desc: "Pastilhas de freio dianteiras", valor: 280, ok: null }, { desc: "Troca de óleo e filtro", valor: 190, ok: null }],
+    fotos: [], historico: [{ quando: "05/10/2026 09:10", msg: "Veículo recebido na recepção" }] },
+  { id: 2, cliente: "Ana Souza", placa: "QWE-4F56", veiculo: "VW Gol 2015", status: "Em serviço",
+    itens: [{ desc: "Correia dentada", valor: 450, ok: true }],
+    fotos: [], historico: [{ quando: "05/10/2026 08:30", msg: "Veículo recebido na recepção" }] },
+  { id: 3, cliente: "Paulo Reis", placa: "RTY-7G89", veiculo: "Fiat Argo 2021", status: "Recebido",
+    itens: [], fotos: [], historico: [{ quando: "05/10/2026 10:05", msg: "Veículo recebido na recepção" }] }
+];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = v => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const now = () => new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const find = id => orders.find(o => o.id === id);
+const log = (o, msg) => o.historico.unshift({ quando: now(), msg });
+
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(d)) return d; } catch (e) {}
+  return structuredClone(seed);
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(orders)); } catch (e) {} }
+
+let orders = load();
+let view = "oficina", selected = null, clientId = null;
+
+/* ---------- Telas ---------- */
+function render() {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  $("#app").innerHTML = view === "oficina" ? oficina() : cliente();
+}
+
+function oficina() {
+  const cols = STATUS.map(s => {
+    const lista = orders.filter(o => o.status === s);
+    return `<section class="col"><h3>${s} <span>${lista.length}</span></h3>${lista.map(card).join("") || '<p class="vazio">—</p>'}</section>`;
+  }).join("");
+  return `<form class="novo" onsubmit="novaOS(event)">
+      <input name="cliente" placeholder="Cliente" required>
+      <input name="placa" placeholder="Placa" required>
+      <input name="veiculo" placeholder="Veículo" required>
+      <button>+ Nova OS</button>
+    </form>
+    <div class="kanban">${cols}</div>${selected ? detalhe(find(selected)) : ""}`;
+}
+
+const card = o => `<article class="card ${o.id === selected ? "sel" : ""}" onclick="sel(${o.id})">
+  <b>${esc(o.placa)}</b><br>${esc(o.veiculo)}<br><small>${esc(o.cliente)}</small></article>`;
+
+function itens(o, cli) {
+  if (!o.itens.length) return '<p class="vazio">Nenhum item no orçamento.</p>';
+  const total = o.itens.filter(i => i.ok === true).reduce((s, i) => s + i.valor, 0);
+  const lis = o.itens.map((i, n) => {
+    const acoes = cli && i.ok === null && o.status === "Aguardando aprovação"
+      ? `<button onclick="decidir(${o.id},${n},true)">Aprovar</button><button class="sec" onclick="decidir(${o.id},${n},false)">Recusar</button>`
+      : `<em class="${i.ok === true ? "ok" : i.ok === false ? "no" : ""}">${i.ok === true ? "Aprovado" : i.ok === false ? "Recusado" : "Pendente"}</em>`;
+    return `<li><span>${esc(i.desc)}</span><b>${brl(i.valor)}</b>${acoes}</li>`;
+  }).join("");
+  return `<ul class="itens">${lis}</ul><p>Total aprovado: <b>${brl(total)}</b></p>`;
+}
+
+const fotos = o => o.fotos.length ? `<div class="fotos">${o.fotos.map(f => `<img src="${f}" alt="Foto da peça">`).join("")}</div>` : "";
+
+function detalhe(o) {
+  if (!o) return "";
+  return `<section class="detalhe">
+    <h2>${esc(o.placa)} · ${esc(o.veiculo)}</h2>
+    <label>Status
+      <select onchange="setStatus(${o.id}, this.value)">${STATUS.map(s => `<option ${s === o.status ? "selected" : ""}>${s}</option>`).join("")}</select>
+    </label>
+    <h3>Orçamento</h3>${itens(o, false)}
+    <form class="inline" onsubmit="addItem(event,${o.id})">
+      <input name="desc" placeholder="Peça / serviço" required>
+      <input name="valor" type="number" min="0" step="0.01" placeholder="R$" required>
+      <button>Adicionar</button>
+    </form>
+    <h3>Fotos das peças</h3>${fotos(o)}
+    <input type="file" accept="image/*" onchange="addFoto(${o.id}, this)">
+    <p><button onclick="enviar(${o.id})">Enviar orçamento ao cliente</button>
+       <button class="sec" onclick="verCliente(${o.id})">Ver como o cliente vê</button></p>
+  </section>`;
+}
+
+function cliente() {
+  const o = find(clientId) || orders[0];
+  if (!o) return "<p>Nenhuma OS cadastrada.</p>";
+  clientId = o.id;
+  const idx = STATUS.indexOf(o.status);
+  return `<section class="detalhe">
+    <label>Simular link do cliente
+      <select onchange="setCliente(+this.value)">${orders.map(x => `<option value="${x.id}" ${x.id === o.id ? "selected" : ""}>${esc(x.placa)} — ${esc(x.cliente)}</option>`).join("")}</select>
+    </label>
+    <h2>Olá, ${esc(o.cliente)}!</h2>
+    <p>${esc(o.veiculo)} · ${esc(o.placa)}</p>
+    <ol class="steps">${STATUS.map((s, n) => `<li class="${n < idx ? "feito" : n === idx ? "atual" : ""}">${s}</li>`).join("")}</ol>
+    <h3>Orçamento</h3>${itens(o, true)}
+    ${o.fotos.length ? `<h3>Fotos das peças</h3>${fotos(o)}` : ""}
+    <h3>Histórico</h3>
+    <ul class="hist">${o.historico.map(h => `<li><small>${esc(h.quando)}</small> ${esc(h.msg)}</li>`).join("")}</ul>
+  </section>`;
+}
+
+/* ---------- Ações ---------- */
+function sel(id) { selected = selected === id ? null : id; render(); }
+function setCliente(id) { clientId = id; render(); }
+function verCliente(id) { clientId = id; view = "cliente"; render(); }
+
+function novaOS(e) {
+  e.preventDefault();
+  const f = new FormData(e.target), id = Date.now();
+  orders.push({ id, cliente: f.get("cliente"), placa: f.get("placa").toUpperCase(), veiculo: f.get("veiculo"),
+    status: STATUS[0], itens: [], fotos: [], historico: [] });
+  log(find(id), "Veículo recebido na recepção");
+  selected = id; save(); render();
+}
+
+function setStatus(id, s) {
+  const o = find(id);
+  if (o.status === s) return;
+  o.status = s; log(o, "Status atualizado: " + s); save(); render();
+}
+
+function addItem(e, id) {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  find(id).itens.push({ desc: f.get("desc"), valor: parseFloat(f.get("valor")), ok: null });
+  save(); render();
+}
+
+function enviar(id) {
+  const o = find(id);
+  if (!o.itens.length) return alert("Adicione ao menos um item ao orçamento.");
+  o.status = STATUS[2]; log(o, "Orçamento enviado ao cliente por link");
+  save(); render();
+}
+
+function decidir(id, n, ok) {
+  const o = find(id);
+  o.itens[n].ok = ok;
+  log(o, `Cliente ${ok ? "aprovou" : "recusou"}: ${o.itens[n].desc}`);
+  if (o.itens.every(i => i.ok !== null)) {
+    if (o.itens.some(i => i.ok)) { o.status = STATUS[3]; log(o, "Orçamento respondido — serviço autorizado"); }
+    else log(o, "Cliente recusou todos os itens");
+  }
+  save(); render();
+}
+
+function addFoto(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const r = Math.min(1, 480 / img.width), c = document.createElement("canvas");
+    c.width = img.width * r; c.height = img.height * r;
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const o = find(id);
+    o.fotos.push(c.toDataURL("image/jpeg", 0.6));
+    log(o, "Foto da peça anexada");
+    URL.revokeObjectURL(img.src); save(); render();
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function resetar() { orders = structuredClone(seed); selected = null; clientId = null; save(); render(); }
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { view = b.dataset.view; render(); });
+render();
+</script>
+</body>
+</html>

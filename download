@@ -1,0 +1,21 @@
+# Dependências e build (caso o projeto evolua para um framework)
+node_modules/
+dist/
+build/
+.cache/
+
+# Credenciais e variáveis de ambiente — nunca versionar
+.env
+.env.*
+*.pem
+*.key
+
+# Sistema operacional e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
