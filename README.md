@@ -3,7 +3,7 @@
 Web app que dá transparência e agilidade à comunicação entre a oficina **Auto Center Veloz** e seus clientes.
 Disciplina de Design Profissional — Estudo de Caso 3.
 
-**Demo (GitHub Pages):** `https://SEU-USUARIO.github.io/autocenter-veloz/`
+**Demo (GitHub Pages):** `https://juraskingue.github.io/autocenter-veloz/`
 
 ## 1. Briefing do problema
 
@@ -59,7 +59,7 @@ No protótipo, o painel e a visão do cliente compartilham o mesmo navegador. Em
 Não precisa instalar nada.
 
 ```bash
-git clone https://github.com/SEU-USUARIO/autocenter-veloz.git
+git clone https://github.com/juraskingue/autocenter-veloz.git
 cd autocenter-veloz
 # abra o index.html no navegador
 ```
